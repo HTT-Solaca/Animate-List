@@ -139,8 +139,60 @@ class Selector(tk.Toplevel):
         self.selected_tags = set()
         self.update_selected_tags_display()
 
+class RangeSelector(tk.Toplevel):
+    def __init__(self, parent, lowest, highest, rang, update_callback,des_callback):
+        super().__init__(parent)
+        self.title("Range Selector")
+        self.firstget = True
+        self.update_callback = update_callback
+        self.lowest_value = tk.DoubleVar()
+        self.highest_value = tk.DoubleVar()
+        self.lowest_value.set(lowest)
+        self.highest_value.set(highest)
+        self.lowest = lowest
+        self.highest = highest
+        self.des_callback = des_callback
+        self.config(bg='white')
 
+        tk.Label(self, text="最低值",bg='white').grid(row=0, column=0,ipadx=10,ipady=10)
+        self.lowest_entry = tk.Entry(self, textvariable=self.lowest_value, width=6)
+        self.lowest_entry.grid(row=0, column=1,padx = 20)
+        self.lowest_slider = tk.Scale(self ,bg='white',from_=lowest, to=highest-0.1, resolution=rang, variable=self.lowest_value, orient=tk.HORIZONTAL, command=self.update_highest_min)
+        self.lowest_slider.grid(row=1, column=0, columnspan=2, ipady=5)
 
+        tk.Label(self, text="最高值",bg='white').grid(row=2, column=0,ipadx=10,ipady=10)
+        self.highest_entry = tk.Entry(self, textvariable=self.highest_value, width=6)
+        self.highest_entry.grid(row=2, column=1,padx = 20)
+        self.highest_slider = tk.Scale(self,bg='white', from_=lowest+0.1, to=highest, resolution=rang, variable=self.highest_value, orient=tk.HORIZONTAL, command=self.update_lowest_max)
+        self.highest_slider.grid(row=3, column=0, columnspan=2, ipady=5)
+
+        self.place_window(parent)
+        self.protocol("WM_DELETE_WINDOW", self.des_callback)
+
+    def update_highest_min(self, value):
+        self.highest_slider.config(from_=max(float(value)+0.1, self.lowest))
+        self.filter_table()
+
+    def update_lowest_max(self, value):
+        self.lowest_slider.config(to=min(self.highest, float(value)-0.1))
+        self.filter_table()
+
+    def filter_table(self):
+        self.update_callback(self.lowest_value.get(), self.highest_value.get())
+
+    def place_window(self, parent):
+        self.geometry('160x200')
+        parent_x, parent_y = parent.winfo_x(), parent.winfo_y()
+        parent_width, parent_height = parent.winfo_width(), parent.winfo_height()
+        toplevel_width, toplevel_height = self.winfo_width(), self.winfo_height()
+        toplevel_x = parent_x + parent_width - toplevel_width
+        toplevel_y = parent_y + parent_height - toplevel_height
+        if self.firstget:
+            toplevel_x -= 160
+            toplevel_y -= 200
+            self.firstget = False
+        self.geometry(f'+{toplevel_x}+{toplevel_y}')
+        self.lift()
 
 
 class Gui(Tooltip,ASSIST,Selector):
@@ -189,6 +241,8 @@ class Gui(Tooltip,ASSIST,Selector):
         for child in self.root.winfo_children():
             if isinstance(child, Selector):
                 child.slector_palce(self.root)
+            elif isinstance(child,RangeSelector):
+                child.place_window(self.root)
     def initfont(self):
         self.standard_font = tkFont.Font(family="等线", size=11, weight="normal")
         self.special_font = tkFont.Font(family="等线", size=11, weight="bold")
@@ -248,9 +302,9 @@ class Gui(Tooltip,ASSIST,Selector):
         self.btcops=tk.Button(self.pwset,height =30,width = 30,image=self.coppng,
             bg='white',relief=GROOVE,activebackground='violet',command= self.settablecf)
         self.btmark=tk.Button(self.pwset,height =30,width = 30,image=self.markpng,
-            bg='white',relief=GROOVE,activebackground='violet',command= self.spass)
+            bg='white',relief=GROOVE,activebackground='violet',command= self.settableM)
         self.btrec=tk.Button(self.pwset,height =30,width = 30,image=self.recpng,
-            bg='white',relief=GROOVE,activebackground='violet',command= self.spass)
+            bg='white',relief=GROOVE,activebackground='violet',command= self.settableR)
         self.sep2 =ttk.Separator(self.pwset, orient="horizontal")
         self.btshowall=tk.Button(self.pwset,height =30,width = 30,image=self.showallpng,
             bg='white',relief=GROOVE,activebackground='orange',command= self.showall)
@@ -311,6 +365,12 @@ class Gui(Tooltip,ASSIST,Selector):
         self.pwwindow.add(self.yscroll)
         self.hidden_rows= set()
         self.filter_using = None
+        self.range_using = None
+        self.lowM=6.0
+        self.highM=10.0
+        self.lowR=0.0
+        self.highM=6.0
+
     '''单击右键编辑'''
     def table_edit(self,event):
         if self.table_edit_entry is not None:
@@ -489,6 +549,11 @@ class Gui(Tooltip,ASSIST,Selector):
         else:
             return True
     def settabletagf(self):
+        for child in self.root.winfo_children():
+            if isinstance(child, RangeSelector):
+                child.destroy()
+                self.tablereset()
+                break
         if self.filter_using == None:
             Selector(self.root,self.alltag,self.update_selected_t)
             self.filter_using = 'TAG'
@@ -506,6 +571,42 @@ class Gui(Tooltip,ASSIST,Selector):
                     break
             Selector(self.root,self.alltag,self.update_selected_t)
             self.filter_using = 'TAG'
+
+    def settableM(self):
+        for child in self.root.winfo_children():
+            if isinstance(child, Selector):
+                child.destroy()
+                self.tablereset()
+                self.filter_using =None
+                break
+
+        if self.range_using == None:
+            RangeSelector(self.root,6.0,10.0,0.1,self.update_mark,self.des_callback)
+            self.range_using = 'M'
+        elif self.range_using == 'M':
+            return
+        else:
+            self.des_callback()
+            RangeSelector(self.root,6.0,10.0,0.1,self.update_mark,self.des_callback)
+            self.range_using = 'M'
+
+    def settableR(self):
+        for child in self.root.winfo_children():
+            if isinstance(child, Selector):
+                child.destroy()
+                self.tablereset()
+                self.filter_using =None
+                break
+        #print(self.range_using)
+        if self.range_using == None:
+            RangeSelector(self.root,0.0,6.0,0.5,self.update_recom,self.des_callback)
+            self.range_using = 'R'
+        elif self.range_using == 'R':
+            return
+        else:
+            self.des_callback()
+            RangeSelector(self.root,0.0,6.0,0.5,self.update_recom,self.des_callback)
+            self.range_using = 'R'
 
 
 
@@ -533,7 +634,8 @@ class Gui(Tooltip,ASSIST,Selector):
         for child in self.root.winfo_children():
             if isinstance(child, Selector):
                 child.clear_all()
-                break
+            elif isinstance(child,RangeSelector):
+                child.destory()
 
     def sortshow(self):
         self.tableview_sortColumn('评分')
@@ -541,6 +643,12 @@ class Gui(Tooltip,ASSIST,Selector):
             self.tableview_sortColumn('评分')
 
     def settablecf(self):
+        for child in self.root.winfo_children():
+            if isinstance(child, RangeSelector):
+                child.destroy()
+                self.tablereset()
+                self.filter_using =None
+                break
         if self.filter_using == None:
             Selector(self.root,self.allc,self.update_selected_c)
             self.filter_using = 'PDC'
@@ -560,6 +668,12 @@ class Gui(Tooltip,ASSIST,Selector):
             self.filter_using = 'PDC'
 
     def update_selected_c(self,tags):
+        for child in self.root.winfo_children():
+            if isinstance(child, RangeSelector):
+                child.destroy()
+                self.tablereset()
+                self.filter_using =None
+                break
         self.selected_C=tags
         self.tablereset()
         if not self.selected_C:
@@ -572,4 +686,34 @@ class Gui(Tooltip,ASSIST,Selector):
                 self.table.detach(item)
                 self.hidden_rows.add(item)
         self.sortshow()
+
+    def update_mark(self,low,hight):
+        self.tablereset()
+        self.lowM,self.highM=low,hight
+        for item in self.table.get_children():
+            thisM = float(self.table.item(item)['values'][2])
+            if not self.lowM<=thisM<=self.highM:
+                self.table.detach(item)
+                self.hidden_rows.add(item)
+        self.sortshow()
+
+    def update_recom(self,low,hight):
+        self.tablereset()
+        self.lowM,self.highM=low,hight
+        for item in self.table.get_children():
+            thisM = float(self.table.item(item)['values'][6])
+            if not self.lowM<=thisM<=self.highM:
+                self.table.detach(item)
+                self.hidden_rows.add(item)
+        self.sortshow()
+
+    def des_callback(self):
+        for child in self.root.winfo_children():
+            if isinstance(child, RangeSelector):
+                child.destroy()
+        self.tablereset()
+        self.range_using == None
+
+
+
 Gui()
